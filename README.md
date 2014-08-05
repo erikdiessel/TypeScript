@@ -1,3 +1,20 @@
+# Unobtrusive Typescript
+
+This is a fork of the TypeScript-compiiler which is fully compliant(passes
+*all* original tests) but also works with .js files which include
+*unobtrusive TypeScript*.
+Unobtrusive TypeScript is Javascript with embedded TypeScript type annotations
+in the comments. This allows you to use the typechecker and other features
+of the TypeScript-compiler but without introducing a new data format.
+All utilities for javascript can still be used (like jslint, or grunt or ...).
+
+Source code in unobtrusive TypeScript:
+    function square(x/*::number*/)/*::number*/ { return x*x; }
+
+Equivalent TypeScript code:
+    function square(x: number): number { return x*x; }
+
+
 # TypeScript
 
 [TypeScript](http://www.typescriptlang.org/) is a language for application-scale JavaScript. TypeScript adds optional types, classes, and modules to JavaScript. TypeScript supports tools for large-scale JavaScript applications for any browser, for any host, on any OS. TypeScript compiles to readable, standards-based JavaScript. Try it out at the [playground](http://www.typescriptlang.org/Playground), and stay up to date via [our blog](http://blogs.msdn.com/typescript) and [twitter account](https://twitter.com/typescriptlang).
