@@ -9,9 +9,11 @@ of the TypeScript-compiler but without introducing a new data format.
 All utilities for javascript can still be used (like jslint, or grunt or ...).
 
 Source code in unobtrusive TypeScript:
+
     function square(x/*::number*/)/*::number*/ { return x*x; }
 
 Equivalent TypeScript code:
+
     function square(x: number): number { return x*x; }
 
 
