@@ -74,7 +74,8 @@ module TypeScript {
     }
 
     export function isTSFile(fname: string) {
-        return isFileOfExtension(fname, ".ts");
+        // Compiler also accepts .js files
+        return isFileOfExtension(fname, ".ts") || isFileOfExtension(fname, ".js");
     }
 
     export function isDTSFile(fname: string) {

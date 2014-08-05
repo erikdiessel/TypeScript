@@ -3593,10 +3593,11 @@ module ts {
                 var start = refPos;
                 var length = refEnd - refPos;
             }
+            /* // The compiler now also accepts .js files
             if (!fileExtensionIs(filename, ".ts")) {
                 errors.push(createFileDiagnostic(refFile, start, length, Diagnostics.File_0_must_have_extension_ts_or_d_ts, filename));
             }
-            else if (!findSourceFile(filename, isDefaultLib, refFile, refPos, refEnd)) {
+            else */ if (!findSourceFile(filename, isDefaultLib, refFile, refPos, refEnd)) {
                 errors.push(createFileDiagnostic(refFile, start, length, Diagnostics.File_0_not_found, filename));
             }
         }
