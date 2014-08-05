@@ -3657,7 +3657,10 @@ module ts {
                         var searchPath = basePath;
                         while (true) {
                             var searchName = normalizePath(combinePaths(searchPath, moduleName));
-                            if (findModuleSourceFile(searchName + ".ts", nameLiteral) || findModuleSourceFile(searchName + ".d.ts", nameLiteral)) {
+                            // also search for modules defined in .js files
+                            if (findModuleSourceFile(searchName + ".ts", nameLiteral)
+                                || findModuleSourceFile(searchName + ".d.ts", nameLiteral)
+                                || findModuleSourceFile(searchName + ".js", nameLiteral)) {
                                 break;
                             }
 

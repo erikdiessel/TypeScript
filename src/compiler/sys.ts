@@ -236,6 +236,8 @@ var sys: System = (function () {
             }
         };
     }
+    
+    
     if (typeof WScript !== "undefined" && typeof ActiveXObject === "function") {
         return getWScriptSystem();
     }
@@ -246,3 +248,68 @@ var sys: System = (function () {
         return undefined; // Unsupported host
     }
 })();
+
+// specifies that /*: is the magic string for
+// unobtrusive typescript
+var specialSymbol = ":";
+
+var startTag = "/*" + specialSymbol;
+var endTag = "*/";
+
+// Returns the typescript equivalent to the unobtrusive
+// typescript in *text*, typescriptMode should be set
+// to false in the beginning
+// approach: recursive state machine
+function toTypescript(text: string): string {
+    var processed = "";
+    
+    var typescriptMode = false;
+    
+    var currentIndex = 0;
+    
+    var length = text.length;
+    
+    while(true) { // leave loop with break-statement
+        if(!typescriptMode) {
+            var startTagIndex: number = text.indexOf(startTag, currentIndex);
+            if(startTagIndex === -1) {
+                break;
+            }
+            processed = processed + text.substring(currentIndex, startTagIndex)
+            currentIndex = startTagIndex + startTag.length;
+            typescriptMode = true;
+        } else { /* typescript-mode */
+            var endTagIndex: number = text.indexOf(endTag, currentIndex);
+            if(endTagIndex === -1) {
+                throw "The input javascript file is malformed, " +
+                    "a block comment is not closed: */ missing"
+            }
+            processed = processed + text.substring(currentIndex, endTagIndex);
+            currentIndex = endTagIndex + endTag.length;
+            typescriptMode = false;
+        }        
+    }
+    // add missing code at the end
+    processed = processed + text.substring(currentIndex);
+
+    return processed;  
+};
+
+var oldReadFile = sys.readFile;
+
+function newReadFile(filename: string, encoding?: string): string {
+    var text: string = oldReadFile(filename, encoding);
+
+    if(filename.match(/.*\.js$/i)) { // .js file
+        return toTypescript(text);
+    } else { // .ts or .d.ts  file => nothing happens
+        return text;
+    }
+}
+
+/* Modifies the readFile function in sys, so that when a
+   js file is read, the input is converted from unobtrusive
+   typescript to normal typescript and a string of standard
+   typescript is returned.
+*/
+sys.readFile = newReadFile;
