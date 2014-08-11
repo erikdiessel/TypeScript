@@ -9,10 +9,12 @@
 /// <reference path="commandLineParser.ts"/>
 
 module ts {
-    export var version = "1.1.0.0";
+    var version = "1.1.0.0";
 
-    /// Checks to see if the locale is in the appropriate format,
-    /// and if it is, attempt to set the appropriate language.
+    /**
+     * Checks to see if the locale is in the appropriate format,
+     * and if it is, attempts to set the appropriate language.
+     */
     function validateLocaleAndSetLanguage(locale: string, errors: Diagnostic[]): boolean {
         var matchResult = /^([a-z]+)([_\-]([a-z]+))?$/.exec(locale.toLowerCase());
 
@@ -78,19 +80,24 @@ module ts {
         return count;
     }
 
-    function reportDiagnostic(error: Diagnostic) {
-        if (error.file) {
-            var loc = error.file.getLineAndCharacterFromPosition(error.start);
-            sys.write(error.file.filename + "(" + loc.line + "," + loc.character + "): " + error.messageText + sys.newLine);
+    function getDiagnosticText(message: DiagnosticMessage, ...args: any[]): string {
+        var diagnostic: Diagnostic = createCompilerDiagnostic.apply(undefined, arguments);
+        return diagnostic.messageText;
+    }
+
+    function reportDiagnostic(diagnostic: Diagnostic) {
+        if (diagnostic.file) {
+            var loc = diagnostic.file.getLineAndCharacterFromPosition(diagnostic.start);
+            sys.write(diagnostic.file.filename + "(" + loc.line + "," + loc.character + "): " + diagnostic.messageText + sys.newLine);
         }
         else {
-            sys.write(error.messageText + sys.newLine);
+            sys.write(diagnostic.messageText + sys.newLine);
         }
     }
 
-    function reportDiagnostics(errors: Diagnostic[]) {
-        for (var i = 0; i < errors.length; i++) {
-            reportDiagnostic(errors[i]);
+    function reportDiagnostics(diagnostics: Diagnostic[]) {
+        for (var i = 0; i < diagnostics.length; i++) {
+            reportDiagnostic(diagnostics[i]);
         }
     }
 
@@ -135,10 +142,10 @@ module ts {
                 }
                 text = "";
             }
-            return text !== undefined ? createSourceFile(filename, text, languageVersion, ByteOrderMark.None) : undefined;
+            return text !== undefined ? createSourceFile(filename, text, languageVersion) : undefined;
         }
 
-        function writeFile(fileName: string, data: string, onError?: (message: string) => void) {
+        function writeFile(fileName: string, data: string, writeByteOrderMark: boolean, onError?: (message: string) => void) {
 
             function directoryExists(directoryPath: string): boolean {
                 if (hasProperty(existingDirectories, directoryPath)) {
@@ -161,7 +168,7 @@ module ts {
 
             try {
                 ensureDirectoriesExist(getDirectoryPath(normalizePath(fileName)));
-                sys.writeFile(fileName, data);
+                sys.writeFile(fileName, data, writeByteOrderMark);
             }
             catch (e) {
                 if (onError) onError(e.message);
@@ -186,37 +193,37 @@ module ts {
             validateLocaleAndSetLanguage(commandLine.options.locale, commandLine.errors);
         }
 
+        // If there are any errors due to command line parsing and/or
+        // setting up localization, report them and quit.
+        if (commandLine.errors.length > 0) {
+            reportDiagnostics(commandLine.errors);
+            return sys.exit(1);
+        }
+
         if (commandLine.options.version) {
             reportDiagnostic(createCompilerDiagnostic(Diagnostics.Version_0, version));
-            sys.exit(0);
+            return sys.exit(0);
         }
 
-        if (commandLine.options.help) {
-            // TODO (drosen): Usage.
-            sys.exit(0);
-        }
-
-        if (commandLine.filenames.length === 0) {
-            commandLine.errors.push(createCompilerDiagnostic(Diagnostics.No_input_files_specified));
-        }
-
-        if (commandLine.errors.length) {
-            reportDiagnostics(commandLine.errors);
-            sys.exit(1);
+        if (commandLine.options.help || commandLine.filenames.length === 0) {
+            printVersion();
+            printHelp();
+            return sys.exit(0);
         }
 
         var defaultCompilerHost = createCompilerHost(commandLine.options);
-
+        
         if (commandLine.options.watch) {
             if (!sys.watchFile) {
                 reportDiagnostic(createCompilerDiagnostic(Diagnostics.The_current_host_does_not_support_the_0_option, "--watch"));
-                sys.exit(1);
+                return sys.exit(1);
             }
 
             watchProgram(commandLine, defaultCompilerHost);
         }
         else {
-            sys.exit(compile(commandLine, defaultCompilerHost).errors.length > 0 ? 1 : 0);
+            var result = compile(commandLine, defaultCompilerHost).errors.length > 0 ? 1 : 0;
+            return sys.exit(result);
         }
     }
 
@@ -238,14 +245,14 @@ module ts {
 
         function addWatchers(program: Program) {
             forEach(program.getSourceFiles(), f => {
-                var filename = f.filename;
+                var filename = getCanonicalName(f.filename);
                 watchers[filename] = sys.watchFile(filename, fileUpdated);
             });
         }
 
         function removeWatchers(program: Program) {
             forEach(program.getSourceFiles(), f => {
-                var filename = f.filename;
+                var filename = getCanonicalName(f.filename);
                 if (hasProperty(watchers, filename)) {
                     watchers[filename].close();
                 }
@@ -257,8 +264,7 @@ module ts {
         // Fired off whenever a file is changed.
         function fileUpdated(filename: string) {
             var firstNotification = isEmpty(updatedFiles);
-
-            updatedFiles[filename] = true;
+            updatedFiles[getCanonicalName(filename)] = true;
 
             // Only start this off when the first file change comes in,
             // so that we can batch up all further changes.
@@ -278,8 +284,10 @@ module ts {
             // specified since the last compilation cycle.
             removeWatchers(program);
 
-            // Gets us syntactically correct files from the last compilation.
-            var getUnmodifiedSourceFile = program.getSourceFile;
+            // Reuse source files from the last compilation so long as they weren't changed.
+            var oldSourceFiles = arrayToMap(
+                filter(program.getSourceFiles(), file => !hasProperty(changedFiles, getCanonicalName(file.filename))),
+                file => getCanonicalName(file.filename));
 
             // We create a new compiler host for this compilation cycle.
             // This new host is effectively the same except that 'getSourceFile'
@@ -287,11 +295,11 @@ module ts {
             // so long as they were not modified.
             var newCompilerHost = clone(compilerHost);
             newCompilerHost.getSourceFile = (fileName, languageVersion, onError) => {
-                if (!hasProperty(changedFiles, fileName)) {
-                    var sourceFile = getUnmodifiedSourceFile(fileName);
-                    if (sourceFile) {
-                        return sourceFile;
-                    }
+                fileName = getCanonicalName(fileName);
+
+                var sourceFile = lookUp(oldSourceFiles, fileName);
+                if (sourceFile) {
+                    return sourceFile;
                 }
 
                 return compilerHost.getSourceFile(fileName, languageVersion, onError);
@@ -300,6 +308,10 @@ module ts {
             program = compile(commandLine, newCompilerHost).program;
             reportDiagnostic(createCompilerDiagnostic(Diagnostics.Compilation_complete_Watching_for_file_changes));
             addWatchers(program);
+        }
+
+        function getCanonicalName(fileName: string) {
+            return compilerHost.getCanonicalFileName(fileName);
         }
     }
 
@@ -340,6 +352,98 @@ module ts {
 
         return { program: program, errors: errors };
 
+    }
+
+    function printVersion() {
+        sys.write(getDiagnosticText(Diagnostics.Version_0, version) + sys.newLine);
+    }
+
+    function printHelp() {
+        var output = "";
+
+        // We want to align our "syntax" and "examples" commands to a certain margin.
+        var syntaxLength = getDiagnosticText(Diagnostics.Syntax_Colon_0, "").length;
+        var examplesLength = getDiagnosticText(Diagnostics.Examples_Colon_0, "").length;
+        var marginLength = Math.max(syntaxLength, examplesLength);
+
+        // Build up the syntactic skeleton.
+        var syntax = makePadding(marginLength - syntaxLength);
+        syntax += "tsc [" + getDiagnosticText(Diagnostics.options) + "] [" + getDiagnosticText(Diagnostics.file) + " ...]";
+
+        output += getDiagnosticText(Diagnostics.Syntax_Colon_0, syntax);
+        output += sys.newLine + sys.newLine;
+
+        // Build up the list of examples.
+        var padding = makePadding(marginLength);
+        output += getDiagnosticText(Diagnostics.Examples_Colon_0, makePadding(marginLength - examplesLength) + "tsc hello.ts") + sys.newLine;
+        output += padding + "tsc --out foo.js foo.ts" + sys.newLine;
+        output += padding + "tsc @args.txt" + sys.newLine;
+        output += sys.newLine;
+
+        output += getDiagnosticText(Diagnostics.Options_Colon) + sys.newLine;
+
+        // Sort our options by their names, (e.g. "--noImplicitAny" comes before "--watch")
+        var optsList = optionDeclarations.slice();
+        optsList.sort((a, b) => compareValues<string>(a.name.toLowerCase(), b.name.toLowerCase()));
+
+        // We want our descriptions to align at the same column in our output,
+        // so we keep track of the longest option usage string.
+        var marginLength = 0;
+        var usageColumn: string[] = []; // Things like "-d, --declaration" go in here.
+        var descriptionColumn: string[] = [];
+
+        for (var i = 0; i < optsList.length; i++) {
+            var option = optsList[i];
+
+            // If an option lacks a description,
+            // it is not officially supported.
+            if (!option.description) {
+                continue;
+            }
+
+            var usageText = " ";
+            if (option.shortName) {
+                usageText += "-" + option.shortName;
+                usageText += getParamName(option);
+                usageText += ", ";
+            }
+
+            usageText += "--" + option.name;
+            usageText += getParamName(option);
+
+            usageColumn.push(usageText);
+            descriptionColumn.push(getDiagnosticText(option.description));
+
+            // Set the new margin for the description column if necessary.
+            marginLength = Math.max(usageText.length, marginLength);
+        }
+
+        // Special case that can't fit in the loop.
+        var usageText = " @<" + getDiagnosticText(Diagnostics.file) + ">";
+        usageColumn.push(usageText);
+        descriptionColumn.push(getDiagnosticText(Diagnostics.Insert_command_line_options_and_files_from_a_file));
+        marginLength = Math.max(usageText.length, marginLength);
+
+        // Print out each row, aligning all the descriptions on the same column.
+        for (var i = 0; i < usageColumn.length; i++) {
+            var usage = usageColumn[i];
+            var description = descriptionColumn[i];
+            output += usage + makePadding(marginLength - usage.length + 2) + description + sys.newLine;
+        }
+
+        sys.write(output);
+        return;
+
+        function getParamName(option: CommandLineOption) {
+            if (option.paramName !== undefined) {
+                return " " + getDiagnosticText(option.paramName);
+            }
+            return "";
+        }
+
+        function makePadding(paddingLength: number): string {
+            return Array(paddingLength + 1).join(" ");
+        }
     }
 }
 

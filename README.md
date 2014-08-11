@@ -23,9 +23,6 @@ To compile/type-check a .js file named 'test.js':
 If you don't specify an output file or an output directory, there will
 be no files generated, but your code is type-checked.
 
-
-# TypeScript
-
     
 All code included in 
     
@@ -37,6 +34,9 @@ and
 tags is interpreted as TypeScript code. The so generated TypeScript code
 is then typechecked etc. You can also compile all the code in one file,
 as if you were programming in normal TypeScript.
+
+# Original documentation
+
 [TypeScript](http://www.typescriptlang.org/) is a language for application-scale JavaScript. TypeScript adds optional types, classes, and modules to JavaScript. TypeScript supports tools for large-scale JavaScript applications for any browser, for any host, on any OS. TypeScript compiles to readable, standards-based JavaScript. Try it out at the [playground](http://www.typescriptlang.org/Playground), and stay up to date via [our blog](http://blogs.msdn.com/typescript) and [twitter account](https://twitter.com/typescriptlang).
 
 

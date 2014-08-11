@@ -1,5 +1,5 @@
 /// <reference path="perfsys.ts"/>
-/// <reference path="..\src\compiler\tc.ts"/>
+/// <reference path="..\src\compiler\tsc.ts"/>
 
 // resolve all files used in this compilation
 if (perftest.hasLogIOFlag()) {
@@ -13,8 +13,9 @@ if (perftest.hasLogIOFlag()) {
         getDefaultLibFilename: () => ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(perftest.getExecutingFilePath())), "lib.d.ts"),
         writeFile: (f: string, content: string) => { throw new Error("Unexpected operation: writeFile"); },
         getCurrentDirectory: () => perftest.getCurrentDirectory(),
-        getCanonicalFileName: getCanonicalFileName,
-        useCaseSensitiveFileNames: () => sys.useCaseSensitiveFileNames
+        getCanonicalFileName: ts.getCanonicalFileName,
+        useCaseSensitiveFileNames: () => sys.useCaseSensitiveFileNames,
+        getNewLine: () => sys.newLine
     };
 
     var commandLine = ts.parseCommandLine(perftest.getArgsWithoutLogIOFlag());
@@ -26,5 +27,4 @@ else {
     var io = perftest.prepare();
     ts.executeCommandLine(perftest.getArgsWithoutIOLogFile());
     perftest.write(io.getOut());
-    perftest.writeErr(io.getErr());
 }

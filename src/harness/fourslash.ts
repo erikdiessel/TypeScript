@@ -466,7 +466,7 @@ module FourSlash {
                 this.assertItemInCompletionList(members.entries, symbol, type, docComment, fullSymbolName, kind);
             }
             else {
-                throw new Error("Expected a member list, but none was provided")
+                throw new Error("Expected a member list, but none was provided");
             }
         }
 
@@ -1895,12 +1895,12 @@ module FourSlash {
         var result = '';
         var fourslashFilename = 'fourslash.ts';
         var tsFn = 'tests/cases/fourslash/' + fourslashFilename;
-        fourslashSourceFile = fourslashSourceFile || ts.createSourceFile(tsFn, Harness.IO.readFile(tsFn), ts.ScriptTarget.ES5, ts.ByteOrderMark.None, /*version*/ 0, /*isOpen*/ false);
-        libdtsSourceFile = libdtsSourceFile || ts.createSourceFile('lib.d.ts', Harness.Compiler.libTextMinimal, ts.ScriptTarget.ES3, ts.ByteOrderMark.None, /*version*/ 0, /*isOpen*/ false);
+        fourslashSourceFile = fourslashSourceFile || ts.createSourceFile(tsFn, Harness.IO.readFile(tsFn), ts.ScriptTarget.ES5, /*version*/ 0, /*isOpen*/ false);
+        libdtsSourceFile = libdtsSourceFile || ts.createSourceFile('lib.d.ts', Harness.Compiler.libTextMinimal, ts.ScriptTarget.ES3, /*version*/ 0, /*isOpen*/ false);
 
         var files: { [filename: string]: ts.SourceFile; } = {};
         files[fourslashFilename] = fourslashSourceFile;
-        files[fileName] = ts.createSourceFile(fileName, content, ts.ScriptTarget.ES5, ts.ByteOrderMark.None, /*version*/ 0, /*isOpen*/ false);
+        files[fileName] = ts.createSourceFile(fileName, content, ts.ScriptTarget.ES5, /*version*/ 0, /*isOpen*/ false);
         files['lib.d.ts'] = libdtsSourceFile;
 
         var host = Harness.Compiler.createCompilerHost(files, (fn, contents) => result = contents);
@@ -2040,7 +2040,7 @@ module FourSlash {
             globalOptions: opts,
             files: files,
             ranges: ranges
-        }
+        };
     }
 
     enum State {

@@ -46,6 +46,8 @@ module ts {
 
         var globals: SymbolTable = {};
 
+        var globalArraySymbol: Symbol;
+
         var globalObjectType: ObjectType;
         var globalFunctionType: ObjectType;
         var globalArrayType: ObjectType;
@@ -616,8 +618,6 @@ module ts {
                 members, callSignatures, constructSignatures, stringIndexType, numberIndexType);
         }
 
-        // Takes a VariableDeclaration because it could be an exported var from a module (VariableDeclaration),
-        // a class or object type property (PropertyDeclaration), or a parameter property (ParameterDeclaration)
         function isOptionalProperty(propertySymbol: Symbol): boolean {
             if (propertySymbol.flags & SymbolFlags.Prototype) {
                 return false;
@@ -677,7 +677,7 @@ module ts {
                 }
 
                 // If symbol is directly available by its name in the symbol table
-                if (isAccessible(symbols[symbol.name])) {
+                if (isAccessible(lookUp(symbols, symbol.name))) {
                     return symbol;
                 }
 
@@ -700,7 +700,7 @@ module ts {
             var qualify = false;
             forEachSymbolTableInScope(enclosingDeclaration, symbolTable => {
                 // If symbol of this name is not available in the symbol table we are ok
-                if (!symbolTable[symbol.name]) {
+                if (!hasProperty(symbolTable, symbol.name)) {
                     // Continue to the next symbol table
                     return false;
                 }
@@ -723,6 +723,52 @@ module ts {
             });
 
             return qualify;
+        }
+
+        function isSymbolAccessible(symbol: Symbol, enclosingDeclaration: Node, meaning: SymbolFlags): SymbolAccessiblityResult {
+            if (symbol && enclosingDeclaration && !(symbol.flags & SymbolFlags.TypeParameter)) {
+                var initialSymbol = symbol;
+                var meaningToLook = meaning;
+                while (symbol) {
+                    // Symbol is accessible if it by itself is accessible
+                    var accessibleSymbol = getAccessibleSymbol(symbol, enclosingDeclaration, meaningToLook);
+                    if (accessibleSymbol) {
+                        if (forEach(accessibleSymbol.declarations, declaration => !isDeclarationVisible(declaration))) {
+                            return {
+                                accessibility: SymbolAccessibility.NotAccessible,
+                                errorSymbolName: symbolToString(initialSymbol, enclosingDeclaration, meaning),
+                                errorModuleName: symbol !== initialSymbol ? symbolToString(symbol, enclosingDeclaration, SymbolFlags.Namespace) : undefined
+                            };
+                        }
+                        return { accessibility: SymbolAccessibility.Accessible };
+                    }
+
+                    // TODO(shkamat): Handle static method of class
+
+                    // If we havent got the accessible symbol doesnt mean the symbol is actually inaccessible. 
+                    // It could be qualified symbol and hence verify the path
+                    // eg:
+                    // module m {
+                    //     export class c {
+                    //     }
+                    // }
+                    // var x: typeof m.c
+                    // In the above example when we start with checking if typeof m.c symbol is accessible,
+                    // we are going to see if c can be accessed in scope directly. 
+                    // But it cant, hence the accessible is going to be undefined, but that doesnt mean m.c is accessible
+                    // It is accessible if the parent m is accessible because then m.c can be accessed through qualification
+                    meaningToLook = SymbolFlags.Namespace;
+                    symbol = symbol.parent;
+                }
+
+                // This is a local symbol that cannot be named
+                return {
+                    accessibility: SymbolAccessibility.CannotBeNamed,
+                    errorSymbolName: symbolToString(initialSymbol, enclosingDeclaration, meaning),
+                };
+            }
+
+            return { accessibility: SymbolAccessibility.Accessible };
         }
 
         // Enclosing declaration is optional when we dont want to get qualified name in the enclosing declaration scope
@@ -760,10 +806,15 @@ module ts {
             return getSymbolName(symbol);
         }
 
+        function writeSymbolToTextWriter(symbol: Symbol, enclosingDeclaration: Node, meaning: SymbolFlags, writer: TextWriter) {
+            writer.write(symbolToString(symbol, enclosingDeclaration, meaning));
+        }
+
         function createSingleLineTextWriter() {
             var result = "";
             return {
                 write(s: string) { result += s; },
+                writeSymbol(symbol: Symbol, enclosingDeclaration?: Node, meaning?: SymbolFlags) { writeSymbolToTextWriter(symbol, enclosingDeclaration, meaning, this); },
                 writeLine() { result += " "; },
                 increaseIndent() { },
                 decreaseIndent() { },
@@ -790,7 +841,7 @@ module ts {
                     writeTypeReference(<TypeReference>type);
                 }
                 else if (type.flags & (TypeFlags.Class | TypeFlags.Interface | TypeFlags.Enum | TypeFlags.TypeParameter)) {
-                    writer.write(symbolToString(type.symbol, enclosingDeclaration, SymbolFlags.Type));
+                    writer.writeSymbol(type.symbol, enclosingDeclaration, SymbolFlags.Type);
                 }
                 else if (type.flags & TypeFlags.Anonymous) {
                     writeAnonymousType(<ObjectType>type, allowFunctionOrConstructorTypeLiteral);
@@ -812,7 +863,7 @@ module ts {
                     writer.write("[]");
                 }
                 else {
-                    writer.write(symbolToString(type.target.symbol, enclosingDeclaration, SymbolFlags.Type));
+                    writer.writeSymbol(type.target.symbol, enclosingDeclaration, SymbolFlags.Type);
                     writer.write("<");
                     for (var i = 0; i < type.typeArguments.length; i++) {
                         if (i > 0) {
@@ -846,7 +897,7 @@ module ts {
 
             function writeTypeofSymbol(type: ObjectType) {
                 writer.write("typeof ");
-                writer.write(symbolToString(type.symbol, enclosingDeclaration, SymbolFlags.Value));
+                writer.writeSymbol(type.symbol, enclosingDeclaration, SymbolFlags.Value);
             }
 
             function writeLiteralType(type: ObjectType, allowFunctionOrConstructorTypeLiteral: boolean) {
@@ -902,7 +953,7 @@ module ts {
                     if (p.flags & (SymbolFlags.Function | SymbolFlags.Method) && !getPropertiesOfType(t).length) {
                         var signatures = getSignaturesOfType(t, SignatureKind.Call);
                         for (var j = 0; j < signatures.length; j++) {
-                            writer.write(symbolToString(p));
+                            writer.writeSymbol(p);
                             if (isOptionalProperty(p)) {
                                 writer.write("?");
                             }
@@ -912,7 +963,7 @@ module ts {
                         }
                     }
                     else {
-                        writer.write(symbolToString(p));
+                        writer.writeSymbol(p);
                         if (isOptionalProperty(p)) {
                             writer.write("?");
                         }
@@ -934,7 +985,7 @@ module ts {
                             writer.write(", ");
                         }
                         var tp = signature.typeParameters[i];
-                        writer.write(symbolToString(tp.symbol));
+                        writer.writeSymbol(tp.symbol);
                         var constraint = getConstraintOfTypeParameter(tp);
                         if (constraint) {
                             writer.write(" extends ");
@@ -952,7 +1003,7 @@ module ts {
                     if (getDeclarationFlagsFromSymbol(p) & NodeFlags.Rest) {
                         writer.write("...");
                     }
-                    writer.write(symbolToString(p));
+                    writer.writeSymbol(p);
                     if (p.valueDeclaration.flags & NodeFlags.QuestionMark || (<VariableDeclaration>p.valueDeclaration).initializer) {
                         writer.write("?");
                     }
@@ -2018,7 +2069,7 @@ module ts {
             return links.resolvedType;
         }
 
-        function getGlobalType(name: string, arity: number = 0): ObjectType {
+        function getTypeOfGlobalSymbol(symbol: Symbol, arity: number): ObjectType {
 
             function getTypeDeclaration(symbol: Symbol): Declaration {
                 var declarations = symbol.declarations;
@@ -2028,14 +2079,11 @@ module ts {
                         case SyntaxKind.ClassDeclaration:
                         case SyntaxKind.InterfaceDeclaration:
                         case SyntaxKind.EnumDeclaration:
-                        case SyntaxKind.TypeLiteral:
-                        case SyntaxKind.FunctionDeclaration:
                             return declaration;
                     }
                 }
             }
 
-            var symbol = resolveName(undefined, name, SymbolFlags.Type, Diagnostics.Cannot_find_global_type_0, name);
             if (!symbol) {
                 return emptyObjectType;
             }
@@ -2051,29 +2099,26 @@ module ts {
             return <ObjectType>type;
         }
 
-        // arrayType argument is used as a backup in case if globalArrayType is not defined
-        function createArrayType(elementType: Type, arrayType?: ObjectType): Type {
-            var rootType = globalArrayType || arrayType;
-            return rootType !== emptyObjectType ? createTypeReference(<GenericType>rootType, [elementType]) : emptyObjectType;
+        function getGlobalSymbol(name: string): Symbol {
+            return resolveName(undefined, name, SymbolFlags.Type, Diagnostics.Cannot_find_global_type_0, name);
+        }
+
+        function getGlobalType(name: string): ObjectType {
+            return getTypeOfGlobalSymbol(getGlobalSymbol(name), 0);
+        }
+
+        function createArrayType(elementType: Type): Type {
+            // globalArrayType will be undefined if we get here during creation of the Array type. This for example happens if
+            // user code augments the Array type with call or construct signatures that have an array type as the return type.
+            // We instead use globalArraySymbol to obtain the (not yet fully constructed) Array type.
+            var arrayType = globalArrayType || getDeclaredTypeOfSymbol(globalArraySymbol);
+            return arrayType !== emptyObjectType ? createTypeReference(<GenericType>arrayType, [elementType]) : emptyObjectType;
         }
 
         function getTypeFromArrayTypeNode(node: ArrayTypeNode): Type {
             var links = getNodeLinks(node);
             if (!links.resolvedType) {
-                var arrayType = globalArrayType;
-                if (!arrayType) {
-                    // if user code contains augmentation for Array type that includes call\construct signatures with arrays as parameter\return types,
-                    // then we might step here then during initialization of the global Array type when globalArrayType is not yet set.
-                    // CODE: interface Array<T> { (): number[] }
-                    // in this case just resolve name 'Array' again and get declared type of symbol.
-                    // this type is the one that eventually should be set as 'globalArrayType'.
-                    // NOTE: this is specific to signatures since got signatures we realize parameter\return types.
-                    var arrayTypeSymbol = resolveName(node, "Array", SymbolFlags.Type, /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined);
-                    Debug.assert(arrayTypeSymbol);
-                    arrayType = getDeclaredTypeOfSymbol(arrayTypeSymbol);
-                    Debug.assert(arrayType);
-                }
-                links.resolvedType = createArrayType(getTypeFromTypeNode(node.elementType), arrayType);
+                links.resolvedType = createArrayType(getTypeFromTypeNode(node.elementType));
             }
             return links.resolvedType;
         }
@@ -3793,21 +3838,40 @@ module ts {
         }
 
         // The candidate list orders groups in reverse, but within a group signatures are kept in declaration order
+        // A nit here is that we reorder only signatures that belong to the same symbol,
+        // so order how inherited signatures are processed is still preserved.
+        // interface A { (x: string): void }
+        // interface B extends A { (x: 'foo'): string }
+        // var b: B;
+        // b('foo') // <- here overloads should be processed as [(x:'foo'): string, (x: string): void]
         function collectCandidates(node: CallExpression, signatures: Signature[]): Signature[]{
             var result: Signature[] = [];
             var lastParent: Node;
+            var lastSymbol: Symbol;
+            var cutoffPos: number = 0;
             var pos: number;
             for (var i = 0; i < signatures.length; i++) {
                 var signature = signatures[i];
                 if (isCandidateSignature(node, signature)) {
-                    var parent = signature.declaration ? signature.declaration.parent : undefined;
-                    if (lastParent && parent === lastParent) {
-                        pos++;
+                    var symbol = signature.declaration && getSymbolOfNode(signature.declaration);
+                    var parent = signature.declaration && signature.declaration.parent;
+                    if (!lastSymbol || symbol === lastSymbol) {                        
+                        if (lastParent && parent === lastParent) {
+                            pos++;
+                        }
+                        else {
+                            lastParent = parent;
+                            pos = cutoffPos;
+                        }
                     }
                     else {
+                        // current declaration belongs to a different symbol
+                        // set cutoffPos so reorderings in the future won't change result set from 0 to cutoffPos
+                        pos = cutoffPos = result.length;
                         lastParent = parent;
-                        pos = 0;
                     }
+                    lastSymbol = symbol;
+
                     for (var j = result.length; j > pos; j--) {
                         result[j] = result[j - 1];
                     }
@@ -6695,7 +6759,9 @@ module ts {
                 isDeclarationVisible: isDeclarationVisible,
                 isImplementationOfOverload: isImplementationOfOverload,
                 writeTypeAtLocation: writeTypeAtLocation,
-                writeReturnTypeOfSignatureDeclaration: writeReturnTypeOfSignatureDeclaration
+                writeReturnTypeOfSignatureDeclaration: writeReturnTypeOfSignatureDeclaration,
+                writeSymbol: writeSymbolToTextWriter,
+                isSymbolAccessible: isSymbolAccessible
             };
             checkProgram();
             return emitFiles(resolver);
@@ -6719,7 +6785,8 @@ module ts {
             getSymbolLinks(unknownSymbol).type = unknownType;
             globals[undefinedSymbol.name] = undefinedSymbol;
             // Initialize special types
-            globalArrayType = getGlobalType("Array", 1);
+            globalArraySymbol = getGlobalSymbol("Array");
+            globalArrayType = getTypeOfGlobalSymbol(globalArraySymbol, 1);
             globalObjectType = getGlobalType("Object");
             globalFunctionType = getGlobalType("Function");
             globalStringType = getGlobalType("String");
