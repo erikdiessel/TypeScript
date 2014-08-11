@@ -28,7 +28,8 @@ All code included in
     
     /*:
     
-and 
+and
+
     */
     
 tags is interpreted as TypeScript code. The so generated TypeScript code
