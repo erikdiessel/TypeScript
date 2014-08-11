@@ -1,28 +1,30 @@
 {
-	"name": "typescript",
-	"author": "Microsoft Corp.",
+	"name": "unobtrusive-typescript",
+	"author": "Erik Diessel",
 	"homepage": "http://typescriptlang.org/",
 	"version": "1.0.1",
 	"licenses": [
 		{
 			"type": "Apache License 2.0", 
-			"url": "https://github.com/Microsoft/TypeScript/blob/master/LICENSE.txt"
+			"url": "https://github.com/erikdiessel/TypeScript/blob/master/LICENSE.txt"
 		}
 	],
-	"description": "TypeScript is a language for application scale JavaScript development",
+	"description": "Unobtrusive TypeScript is a fork of TypeScript which allows to use it with normal .js files",
 	"keywords": [
 		"TypeScript", 
 		"Microsoft", 
 		"compiler", 
 		"language", 
-		"javascript"
+		"javascript",
+		"unobtrusive",
+		"enhancement"
 	],
 	"bugs": {
-		"url" : "https://github.com/Microsoft/TypeScript/issues"
+		"url" : "https://github.com/erikdiessel/TypeScript/issues"
 	},
 	"repository" : { 
 		"type" : "git",	
-		"url" : "https://github.com/Microsoft/TypeScript.git"  
+		"url" : "https://github.com/erikdiessel/TypeScript.git"  
 	},
 	"preferGlobal" : true,
 	"main" : "./bin/tsc.js",
