@@ -1,0 +1,8 @@
+{
+    "scenario": "Unobtrusive TypeScript: type-checking error",
+    "projectRoot": "tests/cases/projects/unobtrusiveTypeScript_type_errors",
+    "inputFiles": [
+        "main.js"
+    ],
+    "baselineCheck": true
+}
