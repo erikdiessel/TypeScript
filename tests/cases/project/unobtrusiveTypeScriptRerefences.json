@@ -1,0 +1,9 @@
+{
+    "scenario": "Unobtrusive TypeScript:  references",
+    "projectRoot": "tests/cases/projects/unobtrusiveTypeScript_references",
+    "inputFiles": [
+        "main.js"
+    ],
+    "baselineCheck": true,
+    "runTest": true
+}

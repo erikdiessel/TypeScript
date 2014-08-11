@@ -1,0 +1,10 @@
+{
+    "scenario": "Unobtrusive TypeScript: Output in one file",
+    "projectRoot": "tests/cases/projects/unobtrusiveTypeScript_output",
+    "inputFiles": [
+        "main.js"    
+    ],
+    "out": "bin/test.js",
+    "baselineCheck": true,
+    "runTest": true
+}
