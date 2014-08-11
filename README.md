@@ -15,6 +15,13 @@ Source code in unobtrusive TypeScript:
 Equivalent TypeScript code:
 
     function square(x: number): number { return x*x; }
+    
+To compile/type-check a .js file named 'test.js':
+    
+    $ tsc test.js
+    
+If you don't specify an output file or an output directory, there will
+be no files generated, but your code is type-checked.
 
 
 # TypeScript
